@@ -51,37 +51,49 @@ jobs:
           sha256sum template/boot_orig.img
 
       # ---------------------------------------------------------------
-      - name: 集成 KernelSU-Next
+      - name: 集成 KernelSU-Next (legacy 分支，适配 4.19)
         working-directory: kernel
         run: |
           set -e
-          # 注意：--depth=1 只拉默认分支(dev)，必须显式指定 --branch next
-          echo "==> clone KernelSU-Next (next 分支)"
+          # 关键：KernelSU-Next 没有 next/main/master 分支
+          #   真实分支: dev, legacy, risk, test, samsung-lateload...
+          #   4.19 内核必须用 legacy（含 compat/kernel_compat.o 兼容层）
+          echo "==> clone legacy 分支"
           rm -rf KernelSU-Next
-          git clone --depth=1 --branch next https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          git clone --depth=1 --branch legacy https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+
           echo "--- kernel 目录 ---"
-          ls -la KernelSU-Next/kernel/ | head -20
-          echo "--- Kconfig 是否有 CONFIG_KSU ---"
+          ls -1 KernelSU-Next/kernel/ | head -25
+
+          echo "--- Kconfig 有 config KSU 吗 ---"
           grep -n "config KSU" KernelSU-Next/kernel/Kconfig
 
+          echo "--- Kbuild 有 obj- 吗 ---"
+          grep -n "^obj-" KernelSU-Next/kernel/Kbuild
+
+          echo "--- compat 目录（旧内核兼容层）---"
+          ls -1 KernelSU-Next/kernel/compat/ 2>/dev/null || echo "  (无 compat)"
+
           echo ""
-          echo "==> 创建符号链接"
+          echo "==> 创建符号链接 drivers/kernelsu"
           ln -sfn ../KernelSU-Next/kernel drivers/kernelsu
           ls -la drivers/kernelsu
 
           echo ""
           echo "==> 修改 drivers/Makefile"
           if ! grep -q "kernelsu" drivers/Makefile; then
-            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+            printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
           fi
-          grep -n "kernelsu" drivers/Makefile
+          echo "  末尾 3 行:"
+          tail -3 drivers/Makefile
 
           echo ""
-          echo "==> 修改 drivers/Kconfig"
-          if ! grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig; then
-            echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
+          echo "==> 修改 drivers/Kconfig（插入到 endmenu 前）"
+          if ! grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig; then
+            sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           fi
-          grep -n "kernelsu" drivers/Kconfig
+          echo "  末尾 5 行:"
+          tail -5 drivers/Kconfig
 
           echo ""
           echo "==> 集成完成"
