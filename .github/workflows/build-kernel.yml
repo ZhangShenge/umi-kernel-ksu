@@ -1,0 +1,182 @@
+name: Build KernelSU Kernel for umi (LineageOS 23.2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksu_branch:
+        description: 'KernelSU-Next 分支/标签'
+        required: false
+        default: 'next'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      # ---------------------------------------------------------------
+      - name: 拉取 LineageOS 内核源码
+        run: |
+          echo "==> cloning LineageOS/android_kernel_xiaomi_sm8250 (lineage-23.2)"
+          git clone --depth=1 -b lineage-23.2 \
+            https://github.com/LineageOS/android_kernel_xiaomi_sm8250 kernel
+          cd kernel
+          echo "HEAD = $(git rev-parse --short=12 HEAD)"
+          echo "期望 = 71b13e62f057 (与手机上的内核比对)"
+
+      # ---------------------------------------------------------------
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            bc bison build-essential ccache curl flex git gnupg gperf \
+            libelf-dev libssl-dev libxml2 libxml2-utils lz4 lzop \
+            pngcrush rsync schedtool squashfs-tools xsltproc zip \
+            zlib1g-dev python3 python-is-python3 \
+            clang llvm lld libc6-dev-i386
+          echo "--- 版本 ---"
+          clang --version | head -1
+          ld.lld --version | head -1
+          make --version | head -1
+          nproc
+
+      # ---------------------------------------------------------------
+      - name: 下载 LineageOS 官方 boot.img（作为打包模板）
+        run: |
+          mkdir -p template
+          curl -L --retry 5 --retry-delay 3 -o template/boot_orig.img \
+            "https://mirrorbits.lineageos.org/full/umi/20261025/boot.img"
+          ls -lh template/boot_orig.img
+          echo "--- sha256 ---"
+          sha256sum template/boot_orig.img
+
+      # ---------------------------------------------------------------
+      - name: 集成 KernelSU-Next
+        working-directory: kernel
+        run: |
+          echo "==> 运行 KernelSU-Next setup.sh"
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${{ github.event.inputs.ksu_branch }}/kernel/setup.sh" | bash -s ${{ github.event.inputs.ksu_branch }}
+          echo ""
+          echo "--- 验证集成 ---"
+          ls -la drivers/kernelsu || echo "!! kernelsu 目录不存在"
+          grep -n "kernelsu" drivers/Makefile || echo "!! Makefile 未修改"
+          grep -n "kernelsu" drivers/Kconfig || echo "!! Kconfig 未修改"
+
+      # ---------------------------------------------------------------
+      - name: 生成 .config
+        working-directory: kernel
+        run: |
+          set -e
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          echo "==> 基础 defconfig (kona-perf)"
+          make O=out ARCH=arm64 vendor/kona-perf_defconfig
+
+          echo "==> 合并 sm8250-common + umi fragments"
+          ./scripts/kconfig/merge_config.sh -O out -m \
+            out/.config \
+            arch/arm64/configs/vendor/xiaomi/sm8250-common.config \
+            arch/arm64/configs/vendor/xiaomi/umi.config
+
+          echo "==> 确认关键项"
+          for k in CONFIG_MACH_XIAOMI_UMI CONFIG_KSU CONFIG_MODULES CONFIG_EROFS_FS; do
+            v=$(grep -E "^${k}=" out/.config || true)
+            echo "  ${v:-未设置: $k}"
+          done
+
+      # ---------------------------------------------------------------
+      - name: 编译内核
+        working-directory: kernel
+        run: |
+          set -e
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          echo "==> 开始编译 (j=$(nproc))"
+          time make O=out ARCH=arm64 -j$(nproc) \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+          echo ""
+          echo "==> 产物检查"
+          ls -lh out/arch/arm64/boot/Image
+          file out/arch/arm64/boot/Image || true
+
+      # ---------------------------------------------------------------
+      - name: 打包 boot.img
+        run: |
+          set -e
+          pip install --quiet unpack_bootimg mkbootimg
+
+          echo "==> 解开原厂 boot.img"
+          unpack_bootimg --boot_img template/boot_orig.img --out unpacked
+          ls -la unpacked/
+
+          echo "--- 原 boot.img 参数 ---"
+          cat unpacked/bootimg-info 2>/dev/null || true
+
+          echo "==> 替换 kernel"
+          cp kernel/out/arch/arm64/boot/Image unpacked/kernel
+          ls -lh unpacked/kernel
+
+          echo "==> 重新打包"
+          mkbootimg \
+            --header_version 2 \
+            --kernel unpacked/kernel \
+            --ramdisk unpacked/ramdisk \
+            --cmdline "androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.memcg=1 lpm_levels.sleep_disabled=1 msm_rtb.filter=0x237 service_locator.enable=1 androidboot.usbcontroller=a600000.dwc3 swiotlb=2048 loop.max_part=7 cgroup.memory=nokmem,nosocket reboot=panic_warm androidboot.fstab_suffix=qcom androidboot.init_fatal_reboot_target=recovery" \
+            --base 0x0 \
+            --kernel_offset 0x8000 \
+            --ramdisk_offset 0x1000000 \
+            --tags_offset 0x100 \
+            --pagesize 4096 \
+            --output boot_ksu.img
+
+          echo ""
+          echo "==> 结果"
+          ls -lh boot_ksu.img
+          sha256sum boot_ksu.img
+          python3 -c "
+          import struct
+          d=open('boot_ksu.img','rb').read()
+          print('size =', len(d))
+          print('magic =', d[:8])
+          ks,ka,rs,ra = struct.unpack_from('<4I', d, 8)
+          print(f'kernel={ks:,} ramdisk={rs:,}')
+          "
+
+      # ---------------------------------------------------------------
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-ksu-umi
+          path: |
+            boot_ksu.img
+            kernel/out/arch/arm64/boot/Image
+          retention-days: 7
+
+      # ---------------------------------------------------------------
+      - name: 汇总
+        if: always()
+        run: |
+          echo "## 编译结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f boot_ksu.img ]; then
+            echo "✅ **boot_ksu.img 已生成**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -lh boot_ksu.img >> $GITHUB_STEP_SUMMARY
+            sha256sum boot_ksu.img >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **打包失败**，检查上一步日志" >> $GITHUB_STEP_SUMMARY
+          fi
