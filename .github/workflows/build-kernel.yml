@@ -63,6 +63,25 @@ jobs:
           grep -n "kernelsu" drivers/Kconfig || echo "!! Kconfig 未修改"
 
       # ---------------------------------------------------------------
+      - name: 补 LineageOS 内核缺失的 min-tool-version.sh
+        working-directory: kernel
+        run: |
+          # LineageOS 的 sm8250 内核缺 scripts/min-tool-version.sh，
+          # 但 scripts/as-version.sh 会调用它，导致 Kconfig 报
+          # "Sorry, this assembler is not supported."
+          # 用 base64 内联避免 YAML 缩进破坏 heredoc 结束符
+          if [ ! -f scripts/min-tool-version.sh ]; then
+            echo "IyEvYmluL3NoCiMgU1BEWC1MaWNlbnNlLUlkZW50aWZpZXI6IEdQTC0yLjAtb25seQpzZXQgLWUKaWYgWyAkIyAhPSAxIF07IHRoZW4KICBlY2hvICJVc2FnZTogJDAgdG9vbG5hbWUiID4mMgogIGV4aXQgMQpmaQpjYXNlICIkMSIgaW4KYmludXRpbHMpIGVjaG8gMi4yMy4wIDs7CmdjYykgICAgICBlY2hvIDQuOS4wICA7OwppY2MpICAgICAgZWNobyAxNi4wLjAgOzsKbGQubGxkKSAgIGVjaG8gMTAuMC4wIDs7Cmxsdm0pCiAgaWYgWyAiJCh1bmFtZSAtbSkiID0gYWFyY2g2NCBdOyB0aGVuIGVjaG8gMTUuMC4wOyBlbHNlIGVjaG8gMTEuMC4wOyBmaQogIDs7CiopIGVjaG8gIlVua25vd24gdG9vbDogJDEiID4mMjsgZXhpdCAxIDs7CmVzYWMK" | base64 -d > scripts/min-tool-version.sh
+            chmod +x scripts/min-tool-version.sh
+            echo "==> 已创建 scripts/min-tool-version.sh"
+          else
+            echo "==> 已存在，跳过"
+          fi
+          echo "--- 内容 ---"
+          cat scripts/min-tool-version.sh
+          echo "--- 验证 ---"
+          sh scripts/min-tool-version.sh binutils
+
       - name: 生成 .config
         working-directory: kernel
         run: |
