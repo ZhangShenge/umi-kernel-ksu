@@ -145,12 +145,15 @@ jobs:
           grep -B1 -A3 'ksu_handle_sys_reboot' kernel/reboot.c | head -20
           echo ""
           echo "--- 验证插入位置（必须在 CAP_SYS_BOOT 之前）---"
-          if grep -A12 'SYSCALL_DEFINE4(reboot' kernel/reboot.c | grep -q 'ksu_handle_sys_reboot'; then
+          if grep -A40 'SYSCALL_DEFINE4(reboot' kernel/reboot.c | grep -q 'ksu_handle_sys_reboot'; then
             echo "  ✅ 已插入到 SYSCALL_DEFINE4(reboot) 内"
           else
             echo "  ❌ 插入失败"
             exit 1
           fi
+          echo ""
+          echo "--- 完整确认 ---"
+          sed -n '/SYSCALL_DEFINE4(reboot/,/CAP_SYS_BOOT/p' kernel/reboot.c | head -25
 
       - name: 补 LineageOS 内核缺失的 min-tool-version.sh
         working-directory: kernel
