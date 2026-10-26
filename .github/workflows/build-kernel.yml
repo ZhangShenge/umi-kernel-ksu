@@ -135,9 +135,16 @@ jobs:
 
           echo "==> 主动启用 KernelSU 相关配置"
           ./scripts/config --file out/.config -e KSU
-          ./scripts/config --file out/.config -e KSU_SUSFS 2>/dev/null || true
-          ./scripts/config --file out/.config -e KSU_DEBUG 2>/dev/null || true
           ./scripts/config --file out/.config -e MODULES
+
+          # hook 模式选择（关键）：
+          #   MANUAL_HOOK       → 需要手动往 kernel/reboot.c 插 ksu_handle_sys_reboot
+          #   KPROBES_HOOK      → 官方注明「不要在 5.10 以下用」
+          #   SYSCALL_TABLE_HOOK → 专门给非 GKI + 内核≥4.17，正是 4.19 的方案
+          ./scripts/config --file out/.config -d KSU_MANUAL_HOOK
+          ./scripts/config --file out/.config -d KSU_KPROBES_HOOK
+          ./scripts/config --file out/.config -e KSU_SYSCALL_TABLE_HOOK
+
           echo "--- 重新 olddefconfig 解析依赖 ---"
           make O=out ARCH=arm64 olddefconfig
 
@@ -153,7 +160,19 @@ jobs:
           done
           echo ""
           echo "==> KSU 相关全部配置"
-          grep -E "CONFIG_KSU" out/.config || echo "  (无 CONFIG_KSU)" 
+          grep -E "CONFIG_KSU" out/.config || echo "  (无 CONFIG_KSU)"
+
+          echo ""
+          echo "==> hook 模式确认"
+          if grep -q "^CONFIG_KSU_SYSCALL_TABLE_HOOK=y" out/.config; then
+            echo "  ✅ syscall table hook（4.19 正确方案）"
+          elif grep -q "^CONFIG_KSU_MANUAL_HOOK=y" out/.config; then
+            echo "  ⚠️ manual hook（会要求手动 patch 内核）"
+          elif grep -q "^CONFIG_KSU_KPROBES_HOOK=y" out/.config; then
+            echo "  ⚠️ kprobes hook（官方不建议 5.10 以下）"
+          else
+            echo "  ❌ 没有 hook 模式被选中"
+          fi 
 
       # ---------------------------------------------------------------
       - name: 编译内核
