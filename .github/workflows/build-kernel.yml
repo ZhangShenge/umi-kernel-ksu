@@ -54,15 +54,38 @@ jobs:
       - name: 集成 KernelSU-Next
         working-directory: kernel
         run: |
-          echo "==> 运行 KernelSU-Next setup.sh"
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${{ github.event.inputs.ksu_branch }}/kernel/setup.sh" | bash -s ${{ github.event.inputs.ksu_branch }}
-          echo ""
-          echo "--- 验证集成 ---"
-          ls -la drivers/kernelsu || echo "!! kernelsu 目录不存在"
-          grep -n "kernelsu" drivers/Makefile || echo "!! Makefile 未修改"
-          grep -n "kernelsu" drivers/Kconfig || echo "!! Kconfig 未修改"
+          set -e
+          # 注意：--depth=1 只拉默认分支(dev)，必须显式指定 --branch next
+          echo "==> clone KernelSU-Next (next 分支)"
+          rm -rf KernelSU-Next
+          git clone --depth=1 --branch next https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          echo "--- kernel 目录 ---"
+          ls -la KernelSU-Next/kernel/ | head -20
+          echo "--- Kconfig 是否有 CONFIG_KSU ---"
+          grep -n "config KSU" KernelSU-Next/kernel/Kconfig
 
-      # ---------------------------------------------------------------
+          echo ""
+          echo "==> 创建符号链接"
+          ln -sfn ../KernelSU-Next/kernel drivers/kernelsu
+          ls -la drivers/kernelsu
+
+          echo ""
+          echo "==> 修改 drivers/Makefile"
+          if ! grep -q "kernelsu" drivers/Makefile; then
+            echo 'obj-$(CONFIG_KSU) += kernelsu/' >> drivers/Makefile
+          fi
+          grep -n "kernelsu" drivers/Makefile
+
+          echo ""
+          echo "==> 修改 drivers/Kconfig"
+          if ! grep -q "drivers/kernelsu/Kconfig" drivers/Kconfig; then
+            echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
+          fi
+          grep -n "kernelsu" drivers/Kconfig
+
+          echo ""
+          echo "==> 集成完成"
+
       - name: 补 LineageOS 内核缺失的 min-tool-version.sh
         working-directory: kernel
         run: |
@@ -98,11 +121,27 @@ jobs:
             arch/arm64/configs/vendor/xiaomi/sm8250-common.config \
             arch/arm64/configs/vendor/xiaomi/umi.config
 
+          echo "==> 主动启用 KernelSU 相关配置"
+          ./scripts/config --file out/.config -e KSU
+          ./scripts/config --file out/.config -e KSU_SUSFS 2>/dev/null || true
+          ./scripts/config --file out/.config -e KSU_DEBUG 2>/dev/null || true
+          ./scripts/config --file out/.config -e MODULES
+          echo "--- 重新 olddefconfig 解析依赖 ---"
+          make O=out ARCH=arm64 olddefconfig
+
+          echo ""
           echo "==> 确认关键项"
           for k in CONFIG_MACH_XIAOMI_UMI CONFIG_KSU CONFIG_MODULES CONFIG_EROFS_FS; do
             v=$(grep -E "^${k}=" out/.config || true)
-            echo "  ${v:-未设置: $k}"
+            if [ -z "$v" ]; then
+              echo "  ❌ 未设置: $k"
+            else
+              echo "  ✅ $v"
+            fi
           done
+          echo ""
+          echo "==> KSU 相关全部配置"
+          grep -E "CONFIG_KSU" out/.config || echo "  (无 CONFIG_KSU)" 
 
       # ---------------------------------------------------------------
       - name: 编译内核
