@@ -111,6 +111,26 @@ jobs:
           echo "--- 验证 ---"
           grep -n -A4 "LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)" KernelSU-Next/kernel/selinux/sepolicy.c | head -24
 
+      - name: 修正 patch_memory.c 的宏污染（4.19 已有 copy_to_kernel_nofault）
+        working-directory: kernel
+        run: |
+          set -e
+          # KernelSU 认为 4.19 没有 copy_to_kernel_nofault（5.8 才引入）
+          # 但 LineageOS 4.19.325 已经 backport，宏会污染 uaccess.h 的声明
+          echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwojIOS/ruWkjSBLZXJuZWxTVS1OZXh0IHBhdGNoX21lbW9yeS5jIOeahOWuj+axoeafk+mXrumimAojCiMg6Zeu6aKY77yaS2VybmVsU1Ug6K6k5Li6IDQuMTkg5rKh5pyJIGNvcHlfdG9fa2VybmVsX25vZmF1bHTvvIg1Ljgg5omN5byV5YWl77yJ77yMCiMgICAgICDkuo7mmK/lrprkuYnlro8gY29weV90b19rZXJuZWxfbm9mYXVsdCAtPiBwcm9iZV9rZXJuZWxfd3JpdGXjgIIKIyAgICAgIOS9hiBMaW5lYWdlT1Mg55qEIDQuMTkuMzI1IOW3sue7jyBiYWNrcG9ydCDkuobov5nkuKrlh73mlbDvvIhtbS9tYWNjZXNzLmPvvInvvIwKIyAgICAgIOWuj+S8muaxoeafkyBpbmNsdWRlL2xpbnV4L3VhY2Nlc3MuaCDnmoTlo7DmmI7vvJoKIyAgICAgICAgICBsb25nIG5vdHJhY2UgY29weV90b19rZXJuZWxfbm9mYXVsdCguLi4pCiMgICAgICDlj5jmiJAgbG9uZyBub3RyYWNlIHByb2JlX2tlcm5lbF93cml0ZSguLi4p77yMbm90cmFjZSDliY3nvLrnsbvlnosg4oaSIOe8luivkeaKpemUmeOAggojCiMg5L+u5aSN77ya5Yig5o6J6L+Z5Liq5a6P5a6a5LmJ77yM6K6p5Luj56CB55u05o6l55So5YaF5qC46Ieq5bim55qEIGNvcHlfdG9fa2VybmVsX25vZmF1bHTjgIIKCmltcG9ydCBpbwppbXBvcnQgc3lzCgpQID0gJ0tlcm5lbFNVLU5leHQva2VybmVsL2hvb2svcGF0Y2hfbWVtb3J5LmMnCgp0cnk6CiAgICBzID0gaW8ub3BlbihQLCBlbmNvZGluZz0ndXRmLTgnKS5yZWFkKCkKZXhjZXB0IEZpbGVOb3RGb3VuZEVycm9yOgogICAgcHJpbnQoJyAgW0VSUl0g5om+5LiN5YiwICVzJyAlIFApCiAgICBzeXMuZXhpdCgxKQoKb3JpZ19sZW4gPSBsZW4ocykKCk9MRCA9ICdcbicuam9pbihbCiAgICAnLy8gY29weV90b19rZXJuZWxfbm9mYXVsdCgpIHdhcyBpbnRyb2R1Y2VkIGluIDUuODsgYmVmb3JlIHRoYXQgaXQgd2FzJywKICAgICcvLyBuYW1lZCBwcm9iZV9rZXJuZWxfd3JpdGUoKScsCiAgICAnI2lmIExJTlVYX1ZFUlNJT05fQ09ERSA8IEtFUk5FTF9WRVJTSU9OKDUsIDgsIDApJywKICAgICcjZGVmaW5lIGNvcHlfdG9fa2VybmVsX25vZmF1bHQoZHN0LCBzcmMsIHNpemUpICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXFwnLAogICAgJ1x0cHJvYmVfa2VybmVsX3dyaXRlKChkc3QpLCAoc3JjKSwgKHNpemUpKScsCiAgICAnI2VuZGlmJywKXSkKCk5FVyA9ICdcbicuam9pbihbCiAgICAnLy8gY29weV90b19rZXJuZWxfbm9mYXVsdCgpIHdhcyBpbnRyb2R1Y2VkIGluIDUuOCwgYnV0IExpbmVhZ2VPUyA0LjE5LjMyNScsCiAgICAnLy8gYWxyZWFkeSBiYWNrcG9ydGVkIGl0IChzZWUgbW0vbWFjY2Vzcy5jKS4gRGVmaW5pbmcgdGhlIG1hY3JvIHdvdWxkJywKICAgICcvLyBwb2xsdXRlIGluY2x1ZGUvbGludXgvdWFjY2Vzcy5oIGFuZCBicmVhayB0aGUgYnVpbGQsIHNvIHNraXAgaXQuJywKXSkKCmlmIE9MRCBpbiBzOgogICAgcyA9IHMucmVwbGFjZShPTEQsIE5FVywgMSkKICAgIHByaW50KCcgIFtPS10g5bey5Yig6ZmkIGNvcHlfdG9fa2VybmVsX25vZmF1bHQg5a6P5a6a5LmJJykKZWxpZiAnI2RlZmluZSBjb3B5X3RvX2tlcm5lbF9ub2ZhdWx0JyBpbiBzOgogICAgIyDlhZzlupXvvJrpgJDooYzliKDpmaTlro/lrprkuYnlnZcKICAgIGxpbmVzID0gcy5zcGxpdCgnXG4nKQogICAgb3V0ID0gW10KICAgIHNraXAgPSBGYWxzZQogICAgcmVtb3ZlZCA9IDAKICAgIGZvciBsaW5lIGluIGxpbmVzOgogICAgICAgIGlmICcjZGVmaW5lIGNvcHlfdG9fa2VybmVsX25vZmF1bHQnIGluIGxpbmU6CiAgICAgICAgICAgIHNraXAgPSBUcnVlCiAgICAgICAgICAgIHJlbW92ZWQgKz0gMQogICAgICAgICAgICAjIOWQjOaXtuWIoOaOieWJjeS4pOihjOazqOmHigogICAgICAgICAgICB3aGlsZSBvdXQgYW5kIChvdXRbLTFdLnN0YXJ0c3dpdGgoJy8vIGNvcHlfdG9fa2VybmVsX25vZmF1bHQnKSBvcgogICAgICAgICAgICAgICAgICAgICAgICAgICBvdXRbLTFdLnN0YXJ0c3dpdGgoJy8vIG5hbWVkIHByb2JlX2tlcm5lbF93cml0ZScpKToKICAgICAgICAgICAgICAgIG91dC5wb3AoKQogICAgICAgICAgICBjb250aW51ZQogICAgICAgIGlmIHNraXA6CiAgICAgICAgICAgIGlmIGxpbmUuc3RyaXAoKSA9PSAnI2VuZGlmJzoKICAgICAgICAgICAgICAgIHNraXAgPSBGYWxzZQogICAgICAgICAgICAgICAgY29udGludWUKICAgICAgICAgICAgaWYgJ3Byb2JlX2tlcm5lbF93cml0ZSgoZHN0KScgaW4gbGluZToKICAgICAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgICAgIHNraXAgPSBGYWxzZQogICAgICAgIG91dC5hcHBlbmQobGluZSkKICAgIHMgPSAnXG4nLmpvaW4ob3V0KQogICAgcHJpbnQoJyAgW09LXSDlhZzlupXliKDpmaTkuoblro/lrprkuYnlnZfvvIglZCDooYznur/ntKLvvIknICUgcmVtb3ZlZCkKZWxzZToKICAgIHByaW50KCcgIFtTS0lQXSDmsqHmnInmib7liLAgY29weV90b19rZXJuZWxfbm9mYXVsdCDlro/vvIzlj6/og73lt7Looqvkv67lpI0nKQoKaW8ub3BlbihQLCAndycsIGVuY29kaW5nPSd1dGYtOCcsIG5ld2xpbmU9J1xuJykud3JpdGUocykKcHJpbnQoJyAg5aSn5bCPICVkIC0+ICVkJyAlIChvcmlnX2xlbiwgbGVuKHMpKSkK" | base64 -d > /tmp/fix_patch_memory.py
+          python3 /tmp/fix_patch_memory.py
+          echo ""
+          echo "--- 验证 ---"
+          head -16 KernelSU-Next/kernel/hook/patch_memory.c
+          echo ""
+          echo "--- 确认宏已删除 ---"
+          if grep -q '#define copy_to_kernel_nofault' KernelSU-Next/kernel/hook/patch_memory.c; then
+            echo "  ❌ 宏还在"
+            exit 1
+          else
+            echo "  ✅ 宏已删除，将使用内核自带的 copy_to_kernel_nofault"
+          fi
+
       - name: 补 LineageOS 内核缺失的 min-tool-version.sh
         working-directory: kernel
         run: |
