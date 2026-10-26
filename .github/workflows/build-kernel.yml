@@ -131,6 +131,18 @@ jobs:
           file out/arch/arm64/boot/Image || true
 
       # ---------------------------------------------------------------
+      - name: 上传裸内核 Image（保险，打包失败也能拿到）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: umi-linux-kernel-Image
+          path: |
+            kernel/out/arch/arm64/boot/Image
+            kernel/out/arch/arm64/boot/dtb
+            kernel/out/arch/arm64/boot/dtbo.img
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: 打包 boot.img
         run: |
           set -e
@@ -138,7 +150,17 @@ jobs:
           echo "==> 下载 AOSP 官方工具"
           curl -sS "https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/mkbootimg.py?format=TEXT" | base64 -d > mkbootimg.py
           curl -sS "https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/unpack_bootimg.py?format=TEXT" | base64 -d > unpack_bootimg.py
+
+          # mkbootimg.py 会 import gki.generate_gki_certificate，必须补上
+          mkdir -p gki
+          curl -sS "https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/gki/generate_gki_certificate.py?format=TEXT" | base64 -d > gki/generate_gki_certificate.py
+          touch gki/__init__.py
+          export PYTHONPATH="$PWD"
+
           chmod +x mkbootimg.py unpack_bootimg.py
+          echo "--- 验证 gki 模块 ---"
+          python3 -c "from gki.generate_gki_certificate import generate_gki_certificate; print('gki OK')"
+          ls -la gki/
           echo "  mkbootimg.py: $(wc -c < mkbootimg.py) 字节"
           echo "  unpack_bootimg.py: $(wc -c < unpack_bootimg.py) 字节"
 
