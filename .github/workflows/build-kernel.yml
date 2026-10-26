@@ -134,18 +134,35 @@ jobs:
       - name: 打包 boot.img
         run: |
           set -e
-          # AOSP 的 mkbootimg 包提供 mkbootimg / unpack_bootimg / repack_bootimg
-          pip install --quiet --upgrade mkbootimg
-          echo "--- 检查工具 ---"
-          command -v mkbootimg && mkbootimg --help 2>&1 | head -3 || echo "mkbootimg 不可用"
-          command -v repack_bootimg || echo "repack_bootimg 不可用"
+          # mkbootimg/unpack_bootimg 是 AOSP 的 Python 脚本，不是 PyPI 包
+          echo "==> 下载 AOSP 官方工具"
+          curl -sS "https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/mkbootimg.py?format=TEXT" | base64 -d > mkbootimg.py
+          curl -sS "https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/main/unpack_bootimg.py?format=TEXT" | base64 -d > unpack_bootimg.py
+          chmod +x mkbootimg.py unpack_bootimg.py
+          echo "  mkbootimg.py: $(wc -c < mkbootimg.py) 字节"
+          echo "  unpack_bootimg.py: $(wc -c < unpack_bootimg.py) 字节"
 
           echo ""
-          echo "==> 用 repack_bootimg 替换内核（保留原 boot.img 全部参数）"
-          repack_bootimg \
-            --boot_img template/boot_orig.img \
-            --kernel kernel/out/arch/arm64/boot/Image \
-            --out boot_ksu.img
+          echo "==> 解开原厂 boot.img"
+          python3 unpack_bootimg.py --boot_img template/boot_orig.img --out unpacked
+          echo "--- 解出内容 ---"
+          ls -lh unpacked/
+
+          echo ""
+          echo "==> 替换内核"
+          cp kernel/out/arch/arm64/boot/Image unpacked/kernel
+          ls -lh unpacked/kernel
+
+          echo ""
+          echo "==> 从原 boot.img 提取打包参数（--format mkbootimg）"
+          python3 unpack_bootimg.py --boot_img template/boot_orig.img --out unpacked --format mkbootimg > mkargs.txt
+          echo "--- 提取到的参数 ---"
+          cat mkargs.txt
+
+          echo ""
+          echo "==> 重新打包（沿用原参数，只换 kernel）"
+          ARGS=$(cat mkargs.txt)
+          python3 mkbootimg.py $ARGS --output boot_ksu.img
 
           echo ""
           echo "==> 结果"
