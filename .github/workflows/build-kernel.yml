@@ -134,46 +134,25 @@ jobs:
       - name: 打包 boot.img
         run: |
           set -e
-          pip install --quiet unpack_bootimg mkbootimg
+          # AOSP 的 mkbootimg 包提供 mkbootimg / unpack_bootimg / repack_bootimg
+          pip install --quiet --upgrade mkbootimg
+          echo "--- 检查工具 ---"
+          command -v mkbootimg && mkbootimg --help 2>&1 | head -3 || echo "mkbootimg 不可用"
+          command -v repack_bootimg || echo "repack_bootimg 不可用"
 
-          echo "==> 解开原厂 boot.img"
-          unpack_bootimg --boot_img template/boot_orig.img --out unpacked
-          ls -la unpacked/
-
-          echo "--- 原 boot.img 参数 ---"
-          cat unpacked/bootimg-info 2>/dev/null || true
-
-          echo "==> 替换 kernel"
-          cp kernel/out/arch/arm64/boot/Image unpacked/kernel
-          ls -lh unpacked/kernel
-
-          echo "==> 重新打包"
-          mkbootimg \
-            --header_version 2 \
-            --kernel unpacked/kernel \
-            --ramdisk unpacked/ramdisk \
-            --cmdline "androidboot.hardware=qcom androidboot.console=ttyMSM0 androidboot.memcg=1 lpm_levels.sleep_disabled=1 msm_rtb.filter=0x237 service_locator.enable=1 androidboot.usbcontroller=a600000.dwc3 swiotlb=2048 loop.max_part=7 cgroup.memory=nokmem,nosocket reboot=panic_warm androidboot.fstab_suffix=qcom androidboot.init_fatal_reboot_target=recovery" \
-            --base 0x0 \
-            --kernel_offset 0x8000 \
-            --ramdisk_offset 0x1000000 \
-            --tags_offset 0x100 \
-            --pagesize 4096 \
-            --output boot_ksu.img
+          echo ""
+          echo "==> 用 repack_bootimg 替换内核（保留原 boot.img 全部参数）"
+          repack_bootimg \
+            --boot_img template/boot_orig.img \
+            --kernel kernel/out/arch/arm64/boot/Image \
+            --out boot_ksu.img
 
           echo ""
           echo "==> 结果"
           ls -lh boot_ksu.img
           sha256sum boot_ksu.img
-          python3 -c "
-          import struct
-          d=open('boot_ksu.img','rb').read()
-          print('size =', len(d))
-          print('magic =', d[:8])
-          ks,ka,rs,ra = struct.unpack_from('<4I', d, 8)
-          print(f'kernel={ks:,} ramdisk={rs:,}')
-          "
+          python3 -c "import struct; d=open('boot_ksu.img','rb').read(); ks,ka,rs,ra,ss,sa,ta,ps=struct.unpack_from('<8I',d,8); hv=struct.unpack_from('<I',d,40)[0]; print('size =',len(d)); print('magic =',d[:8]); print('header_version =',hv); print('kernel =',format(ks,','),'@ 0x%x'%ka); print('ramdisk =',format(rs,','),'@ 0x%x'%ra); print('pagesize =',ps)"
 
-      # ---------------------------------------------------------------
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
