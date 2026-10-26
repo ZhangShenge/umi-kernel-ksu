@@ -131,6 +131,27 @@ jobs:
             echo "  ✅ 宏已删除，将使用内核自带的 copy_to_kernel_nofault"
           fi
 
+      - name: 给 kernel/reboot.c 插入 KernelSU supercall 入口
+        working-directory: kernel
+        run: |
+          set -e
+          # KernelSU Manager 通过 reboot(MAGIC1, MAGIC2, ...) 与内核握手拿 fd
+          # 原生 reboot.c 在 CAP_SYS_BOOT 检查处就 -EPERM 了
+          # 必须在权限检查之前插入 ksu_handle_sys_reboot()
+          echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwojIOe7mSBMaW5lYWdlT1MgNC4xOSDnmoQga2VybmVsL3JlYm9vdC5jIOaPkuWFpSBLZXJuZWxTVSDnmoQgc3VwZXJjYWxsIOWFpeWPowojCiMg6IOM5pmv77yaS2VybmVsU1Ug55qEIE1hbmFnZXIg6YCa6L+HIHJlYm9vdChLU1VfSU5TVEFMTF9NQUdJQzEsIEtTVV9JTlNUQUxMX01BR0lDMiwgLi4uKQojICAgICAg6L+Z5LiqIHN5c2NhbGwg5LiO5YaF5qC45o+h5omL77yM5ou/5YiwIGRyaXZlciBmZOOAggojICAgICAg5L2G5Y6f55SfIHJlYm9vdC5jIOesrCAzMTYg6KGM5pivIGBpZiAoIW5zX2NhcGFibGUoLi4uKSkgcmV0dXJuIC1FUEVSTTtg77yMCiMgICAgICBNYW5hZ2VyIOayoeaciSBDQVBfU1lTX0JPT1TvvIzkvJrlnKjliLDovr7ku7vkvZUgS1NVIOS7o+eggeWJjeWwseiiqyAtRVBFUk0g5oyh5o6J44CCCiMKIyDkv67lpI3vvJrlnKggQ0FQIOajgOafpeS5i+WJjeaPkuWFpSBrc3VfaGFuZGxlX3N5c19yZWJvb3QoKSDosIPnlKjjgIIKCmltcG9ydCBpbwppbXBvcnQgc3lzCgpQID0gJ2tlcm5lbC9yZWJvb3QuYycKCnRyeToKICAgIHMgPSBpby5vcGVuKFAsIGVuY29kaW5nPSd1dGYtOCcpLnJlYWQoKQpleGNlcHQgRmlsZU5vdEZvdW5kRXJyb3I6CiAgICBwcmludCgnICBbRVJSXSDmib7kuI3liLAgJXMnICUgUCkKICAgIHN5cy5leGl0KDEpCgpvcmlnX2xlbiA9IGxlbihzKQoKaWYgJ2tzdV9oYW5kbGVfc3lzX3JlYm9vdCcgaW4gczoKICAgIHByaW50KCcgIFtTS0lQXSByZWJvb3QuYyDph4zlt7Lnu4/mnIkga3N1X2hhbmRsZV9zeXNfcmVib29077yM5peg6ZyA6YeN5aSNIHBhdGNoJykKICAgIHN5cy5leGl0KDApCgojIC0tLS0tLS0tLS0gMS4g5YqgIGV4dGVybiDlo7DmmI4gLS0tLS0tLS0tLQojIOaPkuWcqOacgOWQjuS4gOS4qiAjaW5jbHVkZSDkuYvlkI4KTUFSS0VSID0gJyNpbmNsdWRlIDxsaW51eC9zeXNjYWxscy5oPicKRVhURVJOID0gJycnCiNpZmRlZiBDT05GSUdfS1NVCmV4dGVybiBpbnQga3N1X2hhbmRsZV9zeXNfcmVib290KGludCBtYWdpYzEsIGludCBtYWdpYzIsIHVuc2lnbmVkIGludCBjbWQsCgkJCQkgdm9pZCBfX3VzZXIgKiphcmcpOwojZW5kaWYKJycnCgppZiBNQVJLRVIgaW4gczoKICAgIHMgPSBzLnJlcGxhY2UoTUFSS0VSLCBNQVJLRVIgKyAnXG4nICsgRVhURVJOLCAxKQogICAgcHJpbnQoJyAgW09LXSDlt7LlnKggJXMg5LmL5ZCO5o+S5YWlIGV4dGVybiDlo7DmmI4nICUgTUFSS0VSKQplbHNlOgogICAgIyDlhZzlupXvvJrmj5LlnKggcmViX25vdGlmaWVyX29wcyDlrprkuYnkuYvliY0KICAgIEFMVCA9ICdzdGF0aWMgc3RydWN0IG5vdGlmaWVyX2Jsb2NrICpyZWJvb3Rfbm90aWZpZXJfbGlzdDsnCiAgICBpZiBBTFQgaW4gczoKICAgICAgICBzID0gcy5yZXBsYWNlKEFMVCwgRVhURVJOICsgJ1xuJyArIEFMVCwgMSkKICAgICAgICBwcmludCgnICBbT0tdIOWFnOW6leaPkuWFpSBleHRlcm4g5aOw5piOJykKICAgIGVsc2U6CiAgICAgICAgcHJpbnQoJyAgW0VSUl0g5om+5LiN5Yiw5o+S5YWl54K5JykKICAgICAgICBzeXMuZXhpdCgxKQoKIyAtLS0tLS0tLS0tIDIuIOWcqCBTWVNDQUxMX0RFRklORTQocmVib290KSDph4zmj5LlhaXosIPnlKggLS0tLS0tLS0tLQpPTEQgPSAnJycJY2hhciBidWZmZXJbMjU2XTsKCWludCByZXQgPSAwOwoKCS8qIFdlIG9ubHkgdHJ1c3QgdGhlIHN1cGVydXNlciB3aXRoIHJlYm9vdGluZyB0aGUgc3lzdGVtLiAqLycnJwoKTkVXID0gJycnCWNoYXIgYnVmZmVyWzI1Nl07CglpbnQgcmV0ID0gMDsKCiNpZmRlZiBDT05GSUdfS1NVCgkvKgoJICogS2VybmVsU1Ug55qEIHN1cGVyY2FsbCDlhaXlj6PjgIIKCSAqIE1hbmFnZXIg5rKh5pyJIENBUF9TWVNfQk9PVO+8jOW/hemhu+WcqOS4i+mdoueahOadg+mZkOajgOafpeS5i+WJjeaLpuaIqu+8jAoJICog5ZCm5YiZ5o+h5omL6K+35rGC5Lya6KKrIC1FUEVSTSDmjKHmjonvvIzlr7zoh7Qga3N1Y3RsIOaLv+S4jeWIsCBkcml2ZXIgZmTjgIIKCSAqIOivpeWHveaVsOWGhemDqOiHquihjOagoemqjCBtYWdpYzEvbWFnaWMy77yM6Z2eIEtTVSDosIPnlKjkvJrnq4vliLvov5Tlm57jgIIKCSAqLwoJa3N1X2hhbmRsZV9zeXNfcmVib290KG1hZ2ljMSwgbWFnaWMyLCBjbWQsICZhcmcpOwojZW5kaWYKCgkvKiBXZSBvbmx5IHRydXN0IHRoZSBzdXBlcnVzZXIgd2l0aCByZWJvb3RpbmcgdGhlIHN5c3RlbS4gKi8nJycKCmlmIE9MRCBpbiBzOgogICAgcyA9IHMucmVwbGFjZShPTEQsIE5FVywgMSkKICAgIHByaW50KCcgIFtPS10g5bey5ZyoIENBUF9TWVNfQk9PVCDmo4Dmn6XkuYvliY3mj5LlhaUga3N1X2hhbmRsZV9zeXNfcmVib290IOiwg+eUqCcpCmVsc2U6CiAgICBwcmludCgnICBbRVJSXSDmib7kuI3liLDmj5LlhaXngrknKQogICAgcHJpbnQoJyAg5a6e6ZmF5YaF5a6554mH5q61OicpCiAgICBpZHggPSBzLmZpbmQoJ1NZU0NBTExfREVGSU5FNChyZWJvb3QnKQogICAgaWYgaWR4ID49IDA6CiAgICAgICAgcHJpbnQocmVwcihzW2lkeDppZHgrNDAwXSkpCiAgICBzeXMuZXhpdCgxKQoKaW8ub3BlbihQLCAndycsIGVuY29kaW5nPSd1dGYtOCcsIG5ld2xpbmU9J1xuJykud3JpdGUocykKcHJpbnQoJyAg5aSn5bCPICVkIC0+ICVkJyAlIChvcmlnX2xlbiwgbGVuKHMpKSkK" | base64 -d > /tmp/fix_reboot_c.py
+          python3 /tmp/fix_reboot_c.py
+          echo ""
+          echo "--- 验证 extern ---"
+          grep -B1 -A3 'ksu_handle_sys_reboot' kernel/reboot.c | head -20
+          echo ""
+          echo "--- 验证插入位置（必须在 CAP_SYS_BOOT 之前）---"
+          if grep -A12 'SYSCALL_DEFINE4(reboot' kernel/reboot.c | grep -q 'ksu_handle_sys_reboot'; then
+            echo "  ✅ 已插入到 SYSCALL_DEFINE4(reboot) 内"
+          else
+            echo "  ❌ 插入失败"
+            exit 1
+          fi
+
       - name: 补 LineageOS 内核缺失的 min-tool-version.sh
         working-directory: kernel
         run: |
@@ -174,9 +195,12 @@ jobs:
           #   MANUAL_HOOK       → 需要手动往 kernel/reboot.c 插 ksu_handle_sys_reboot
           #   KPROBES_HOOK      → 官方注明「不要在 5.10 以下用」
           #   SYSCALL_TABLE_HOOK → 专门给非 GKI + 内核≥4.17，正是 4.19 的方案
-          ./scripts/config --file out/.config -d KSU_MANUAL_HOOK
+          # 必须用 MANUAL_HOOK：
+          #   SYSCALL_TABLE_HOOK 只 hook execve/execveat/faccessat/newfstatat
+          #   没有 sys_reboot，Manager 的握手会失败
+          ./scripts/config --file out/.config -e KSU_MANUAL_HOOK
           ./scripts/config --file out/.config -d KSU_KPROBES_HOOK
-          ./scripts/config --file out/.config -e KSU_SYSCALL_TABLE_HOOK
+          ./scripts/config --file out/.config -d KSU_SYSCALL_TABLE_HOOK
 
           echo "--- 重新 olddefconfig 解析依赖 ---"
           make O=out ARCH=arm64 olddefconfig
@@ -197,12 +221,12 @@ jobs:
 
           echo ""
           echo "==> hook 模式确认"
-          if grep -q "^CONFIG_KSU_SYSCALL_TABLE_HOOK=y" out/.config; then
-            echo "  ✅ syscall table hook（4.19 正确方案）"
-          elif grep -q "^CONFIG_KSU_MANUAL_HOOK=y" out/.config; then
-            echo "  ⚠️ manual hook（会要求手动 patch 内核）"
+          if grep -q "^CONFIG_KSU_MANUAL_HOOK=y" out/.config; then
+            echo "  ✅ manual hook（含 reboot.c 握手，Manager 可用）"
+          elif grep -q "^CONFIG_KSU_SYSCALL_TABLE_HOOK=y" out/.config; then
+            echo "  ⚠️ syscall table hook（无 sys_reboot，Manager 无法握手）"
           elif grep -q "^CONFIG_KSU_KPROBES_HOOK=y" out/.config; then
-            echo "  ⚠️ kprobes hook（官方不建议 5.10 以下）"
+            echo "  ⚠️ kprobes hook"
           else
             echo "  ❌ 没有 hook 模式被选中"
           fi 
