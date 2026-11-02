@@ -314,7 +314,8 @@ jobs:
           echo ""
           echo "==> 重新打包（沿用原参数，只换 kernel）"
           ARGS=$(cat mkargs.txt)
-          python3 mkbootimg.py $ARGS --output boot_ksu.img
+          # mkargs.txt 里有带空格的 --cmdline '...'，必须 eval 才能保持引号
+          eval "python3 mkbootimg.py $ARGS --output boot_ksu.img"
 
           echo ""
           echo "==> 结果"
