@@ -61,6 +61,8 @@ jobs:
           echo "==> clone legacy 分支"
           rm -rf KernelSU-Next
           git clone --depth=1 --branch legacy https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU-Next
+          git -C KernelSU-Next fetch --depth=1 origin 165b87fa99abfe78058c4dc9df43c432e86b8011
+          git -C KernelSU-Next checkout -q FETCH_HEAD
 
           echo "--- kernel 目录 ---"
           ls -1 KernelSU-Next/kernel/ | head -25
